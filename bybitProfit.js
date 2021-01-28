@@ -1,6 +1,23 @@
 const config = require('./config.json');
 const ccxt = require('ccxt');
 const dayjs = require('dayjs');
+const winston = require('winston');
+const { program } = require('commander');
+const ora = require('ora');
+const chalk = require('chalk');
+
+
+program.version('0.0.1');
+
+program
+    .option('-s, --symbol <type>', 'symbol', 'ETH')
+    .option('-d, --daysAgo <type>', 'time period to lookback', 7)
+
+program.parse(process.argv);
+const options = program.opts();
+
+console.log(options.daysAgo)
+console.log(options.symbol)
 
 // Create connection to Bybit using APIs in config.json
 const bybit = new ccxt.bybit({
@@ -38,18 +55,21 @@ const avgArr = function (arr) {
 //  symbol : Currency/Coin you want PNL data from, Bybit accepts only these: BTC ETH EOS XRP USDT
 //
 // Function will print out every entry for Realized PNL to console and return the Average and Cumalative Totals of PNL and Profit Percentage
-const getPNL = async function (afterDate, symbol) {
+const getPNL = async function (daysAgo, symbol) {
     let pnl = await bybit.v2PrivateGetWalletFundRecords({'coin':symbol, 'limit': 50})
     let data = pnl.result.data
     let cumPNL = []
     let cumPer = []
+    let dateOffset = (24*60*60*1000) * daysAgo
+    let myDate = new Date()
+    let daysAgoVal = myDate.setTime(myDate.getTime()- dateOffset)
 
     data.forEach(i => {
         let date = i.exec_time
         let p = i.amount
         let w = i.wallet_balance
         let per = pnlPerc(p, w).toFixed(2)
-        if(dayjs(i.exec_time).isAfter(dayjs(afterDate))) {
+        if(dayjs(i.exec_time).isAfter(dayjs(daysAgoVal))) {
             if(i.type == 'RealisedPNL'){
                 if(isNaN(parseFloat(p))) {
                     console.error('NaN found')
@@ -63,6 +83,8 @@ const getPNL = async function (afterDate, symbol) {
             } else {
                 // console.log('Not PNL') // Debug
             }
+        } else {
+            // console.log(`Days ago: ${dayjs(daysAgoVal)}`)
         }
     });
     let totalPNL = sumArr(cumPNL).toFixed(10)*1
@@ -78,14 +100,15 @@ const getPNL = async function (afterDate, symbol) {
 
 // Examples of using function in a Promise 
 
-getPNL('2021-01-14', 'BTC').then(function(btc){
+getPNL(options.daysAgo, options.symbol).then(function(btc){
     console.log(`Total PNL in ${btc.coin}: ${btc.pnl}`)
     console.log(`Cumulative Profit Percentage: ${btc.perc}%\n Average Daily Percentage: ${btc.avgPer.toFixed(2)}%`)
 })
-getPNL('2021-01-14', 'ETH').then(function(eth){    
-    console.log(`Total PNL in ${eth.coin}: ${eth.pnl}`)
-    console.log(`Cumulative Profit Percentage: ${eth.perc}%\n Average Daily Percentage: ${eth.avgPer.toFixed(2)}%`)
 
-});
+// getPNL('2021-01-14', 'ETH').then(function(eth){    
+//     console.log(`Total PNL in ${eth.coin}: ${eth.pnl}`)
+//     console.log(`Cumulative Profit Percentage: ${eth.perc}%\n Average Daily Percentage: ${eth.avgPer.toFixed(2)}%`)
+
+// });
 
 
